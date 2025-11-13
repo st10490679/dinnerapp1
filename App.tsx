@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,72 +10,77 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
+
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { StatusBar } from "expo-status-bar";
 
+// =============================
+// TYPES
+// Defines what a dish/menu item looks like
+// =============================
 type MenuItem = {
   id: string;
   name: string;
   description: string;
-  course: string;
-  price: string;
+  category: "Starters" | "Mains" | "Dessert" | "Drinks";
+  price: number;
 };
 
 // =============================
-// HOME / MENU SCREEN
+// HOME SCREEN
+// Displays all menu items
 // =============================
-function MenuScreen({ menuItems }: { menuItems: MenuItem[] }) {
-  const [selectedCourse, setSelectedCourse] = useState("Starters");
-
-  const filteredItems = menuItems.filter(
-    (item) => item.course === selectedCourse
-  );
-
+function HomeScreen({
+  menuItems,
+  onRemoveItem,
+}: {
+  menuItems: MenuItem[];
+  onRemoveItem: (id: string) => void;
+}) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Browse the Menu</Text>
+      <Text style={styles.title}>Tonight's Dining Selection</Text>
+      <Text style={styles.totalCount}>Total menu items: {menuItems.length}</Text>
 
-      {/* Course tabs */}
-      <View style={styles.courseTabs}>
-        {["Starters", "Mains", "Desserts"].map((course) => (
-          <TouchableOpacity
-            key={course}
-            style={[
-              styles.tabButton,
-              selectedCourse === course && styles.selectedTab,
-            ]}
-            onPress={() => setSelectedCourse(course)}
-          >
-            <Text
-              style={
-                selectedCourse === course
-                  ? styles.selectedTabText
-                  : styles.tabText
-              }
-            >
-              {course}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Menu list */}
       <FlatList
-        data={filteredItems}
+        data={menuItems}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View style={styles.menuCard}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={styles.dishName}>{item.name}</Text>
-              <Text style={styles.price}>R{item.price}</Text>
+          <View style={styles.itemCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemCategory}>{item.category}</Text>
+              <Text style={styles.itemPrice}>R {item.price.toFixed(2)}</Text>
+              <Text style={styles.itemDescription}>{item.description}</Text>
             </View>
-            <Text style={styles.dishDescription}>{item.description}</Text>
+
+            {/* Delete button for removing items */}
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={() =>
+                Alert.alert(
+                  "Remove Dish",
+                  `Are you sure you want to delete "${item.name}"?`,
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Delete",
+                      style: "destructive",
+                      onPress: () => onRemoveItem(item.id),
+                    },
+                  ]
+                )
+              }
+            >
+              <Text style={{ color: "#C7A247", fontWeight: "bold" }}>X</Text>
+            </TouchableOpacity>
           </View>
         )}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No dishes in this course yet.</Text>
+          <Text style={styles.emptyText}>No dishes added yet.</Text>
         }
       />
     </View>
@@ -84,16 +89,19 @@ function MenuScreen({ menuItems }: { menuItems: MenuItem[] }) {
 
 // =============================
 // ADD DISH SCREEN
+// Where users can add new dishes
 // =============================
-function AddDishScreen({ onAddDish }: { onAddDish: (item: MenuItem) => void }) {
+function AddDishScreen({ onAddDish }: { onAddDish: (dish: MenuItem) => void }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [course, setCourse] = useState("Starters");
-  const [price, setPrice] = useState("");
+  const [category, setCategory] = useState<MenuItem["category"]>("Starters");
+  const [priceText, setPriceText] = useState("");
 
-  const handleSave = () => {
-    if (!name.trim() || !price.trim()) {
-      alert("Please fill in the dish name and price.");
+  // Handles saving a new dish
+  const handleAdd = () => {
+    const price = Number(priceText);
+    if (!name.trim() || isNaN(price) || price <= 0) {
+      Alert.alert("Please fill in all fields correctly.");
       return;
     }
 
@@ -101,19 +109,24 @@ function AddDishScreen({ onAddDish }: { onAddDish: (item: MenuItem) => void }) {
       id: Date.now().toString(),
       name: name.trim(),
       description: description.trim(),
-      course,
-      price: price.trim(),
+      category,
+      price,
     };
 
     onAddDish(newDish);
     setName("");
     setDescription("");
-    setCourse("Starters");
-    setPrice("");
-    alert("Dish added successfully!");
+    setCategory("Starters");
+    setPriceText("");
+    Alert.alert("Dish added successfully!");
   };
 
-  const courses = ["Starters", "Mains", "Desserts"];
+  const categories: MenuItem["category"][] = [
+    "Starters",
+    "Mains",
+    "Dessert",
+    "Drinks",
+  ];
 
   return (
     <KeyboardAvoidingView
@@ -121,100 +134,201 @@ function AddDishScreen({ onAddDish }: { onAddDish: (item: MenuItem) => void }) {
       style={{ flex: 1 }}
     >
       <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.title}>Add a New Dish</Text>
+        <Text style={styles.title}>Add New Dish</Text>
 
-        <Text style={styles.label}>Dish Name:</Text>
+        {/* Dish name */}
+        <Text style={styles.label}>Dish Name</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g., Grilled Salmon"
+          placeholder="e.g. Grilled Salmon"
+          placeholderTextColor="#A97F2E"
           value={name}
           onChangeText={setName}
         />
 
-        <Text style={styles.label}>Description:</Text>
-        <TextInput
-          style={[styles.input, { height: 80 }]}
-          multiline
-          placeholder="Short description"
-          value={description}
-          onChangeText={setDescription}
-        />
-
-        <Text style={styles.label}>Select Course:</Text>
-        <View style={styles.dropdown}>
-          {courses.map((c) => (
+        {/* Category selector */}
+        <Text style={styles.label}>Select Category</Text>
+        <View style={styles.categoryButtons}>
+          {categories.map((option) => (
             <TouchableOpacity
-              key={c}
+              key={option}
               style={[
-                styles.dropdownOption,
-                course === c && styles.selectedDropdownOption,
+                styles.categoryButton,
+                category === option && styles.selectedCategoryButton,
               ]}
-              onPress={() => setCourse(c)}
+              onPress={() => setCategory(option)}
             >
               <Text
                 style={
-                  course === c
-                    ? styles.selectedDropdownText
-                    : styles.dropdownText
+                  category === option
+                    ? styles.selectedCategoryText
+                    : styles.categoryText
                 }
               >
-                {c}
+                {option}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Price:</Text>
+        {/* Price input */}
+        <Text style={styles.label}>Price (R)</Text>
         <TextInput
           style={styles.input}
-          placeholder="R 0.00"
-          keyboardType="numeric"
-          value={price}
-          onChangeText={setPrice}
+          placeholder="0.00"
+          placeholderTextColor="#A97F2E"
+          keyboardType="decimal-pad"
+          value={priceText}
+          onChangeText={setPriceText}
         />
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Dish</Text>
-        </TouchableOpacity>
+        {/* Description input */}
+        <Text style={styles.label}>Description</Text>
+        <TextInput
+          style={[styles.input, { height: 80 }]}
+          multiline
+          placeholder="Short description of the dish"
+          placeholderTextColor="#A97F2E"
+          value={description}
+          onChangeText={setDescription}
+        />
 
-        {/* Display menu items summary */}
-        <Text style={styles.subTitle}>Menu Items:</Text>
-        <Text style={styles.summaryText}>
-          (Once you add dishes, view them under the “Browse Menu” tab)
-        </Text>
+        {/* Buttons */}
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={() => {
+              setName("");
+              setDescription("");
+              setCategory("Starters");
+              setPriceText("");
+            }}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.saveButton]}
+            onPress={handleAdd}
+          >
+            <Text style={styles.saveText}>Save</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 // =============================
+// FILTER SCREEN
+// Allows filtering menu items by category
+// =============================
+function FilterScreen({ menuItems }: { menuItems: MenuItem[] }) {
+  const [selectedCategory, setSelectedCategory] = useState<
+    MenuItem["category"] | "All"
+  >("All");
+
+  // Filters the list based on selected category
+  const filteredItems = useMemo(() => {
+    if (selectedCategory === "All") return menuItems;
+    return menuItems.filter((item) => item.category === selectedCategory);
+  }, [menuItems, selectedCategory]);
+
+  const filterOptions: (MenuItem["category"] | "All")[] = [
+    "All",
+    "Starters",
+    "Mains",
+    "Dessert",
+    "Drinks",
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Filter by Category</Text>
+
+      {/* Filter buttons */}
+      <View style={styles.filterRow}>
+        {filterOptions.map((opt) => (
+          <TouchableOpacity
+            key={opt}
+            style={[
+              styles.pill,
+              selectedCategory === opt && styles.pillActive,
+            ]}
+            onPress={() => setSelectedCategory(opt)}
+          >
+            <Text
+              style={[
+                styles.pillText,
+                selectedCategory === opt && { color: "#fff" },
+              ]}
+            >
+              {opt}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Filtered results */}
+      {filteredItems.length === 0 ? (
+        <Text style={styles.emptyText}>No dishes found for this category.</Text>
+      ) : (
+        <FlatList
+          data={filteredItems}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.itemCard}>
+              <Text style={styles.itemName}>{item.name}</Text>
+              <Text style={styles.itemCategory}>{item.category}</Text>
+              <Text style={styles.itemPrice}>R {item.price.toFixed(2)}</Text>
+              <Text style={styles.itemDescription}>{item.description}</Text>
+            </View>
+          )}
+        />
+      )}
+    </View>
+  );
+}
+
+// =============================
 // MAIN APP
+// Combines all tabs (Menu + Add + Filter)
 // =============================
 const Tab = createBottomTabNavigator();
 
 export default function App() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
-  const addDish = (dish: MenuItem) => {
-    setMenuItems((prev) => [...prev, dish]);
+  const addMenuItem = (item: MenuItem) => {
+    setMenuItems((prev) => [item, ...prev]);
+  };
+
+  const removeMenuItem = (id: string) => {
+    setMenuItems((prev) => prev.filter((p) => p.id !== id));
   };
 
   return (
     <NavigationContainer>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
       <Tab.Navigator
         screenOptions={{
-          tabBarLabelStyle: { fontSize: 14, fontWeight: "bold" },
-          tabBarStyle: { backgroundColor: "#fff6f1" },
-          headerStyle: { backgroundColor: "#fff6f1" },
-          headerTintColor: "#b36b5e",
+          tabBarStyle: { backgroundColor: "#F8D7DA" },
+          headerStyle: { backgroundColor: "#F8D7DA" },
+          headerTintColor: "#5A4309",
+          tabBarActiveTintColor: "#C7A247",
+          tabBarInactiveTintColor: "#8E6C2B",
         }}
       >
-        <Tab.Screen name="Browse Menu" options={{ title: "Browse Menu" }}>
-          {() => <MenuScreen menuItems={menuItems} />}
+        <Tab.Screen name="Menu">
+          {() => <HomeScreen menuItems={menuItems} onRemoveItem={removeMenuItem} />}
         </Tab.Screen>
-        <Tab.Screen name="Add Dish" options={{ title: "Add Dish" }}>
-          {() => <AddDishScreen onAddDish={addDish} />}
+
+        <Tab.Screen name="Add">
+          {() => <AddDishScreen onAddDish={addMenuItem} />}
+        </Tab.Screen>
+
+        <Tab.Screen name="Filter">
+          {() => <FilterScreen menuItems={menuItems} />}
         </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
@@ -228,109 +342,96 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: 20,
-    backgroundColor: "#fffaf7",
+    backgroundColor: "#FCE4EC",
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "bold",
-    color: "#3b2d2a",
+    color: "#5A4309",
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 12,
   },
-  label: {
-    fontWeight: "bold",
-    color: "#3b2d2a",
-    marginBottom: 5,
+  totalCount: {
+    color: "#C7A247",
+    textAlign: "center",
+    marginBottom: 12,
+    fontSize: 14,
   },
-  input: {
-    backgroundColor: "#f1e3c8",
+  itemCard: {
+    flexDirection: "row",
+    backgroundColor: "#FFF8F0",
+    borderColor: "#C7A247",
     borderWidth: 1,
-    borderColor: "#d4b996",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: "flex-start",
+  },
+  itemName: { color: "#5A4309", fontSize: 18, fontWeight: "bold" },
+  itemCategory: { color: "#8E6C2B", marginTop: 4 },
+  itemPrice: { color: "#A97F2E", marginTop: 4, fontWeight: "700" },
+  itemDescription: { color: "#6B4E1D", marginTop: 6 },
+  emptyText: { textAlign: "center", color: "#8E6C2B", marginTop: 40 },
+
+  label: { color: "#5A4309", fontWeight: "bold", marginBottom: 6, marginTop: 6 },
+  input: {
+    backgroundColor: "#FFF8F0",
+    color: "#5A4309",
+    borderColor: "#C7A247",
+    borderWidth: 1,
     borderRadius: 8,
     padding: 10,
-    marginBottom: 15,
-    color: "#3b2d2a",
+    marginBottom: 12,
   },
-  dropdown: {
+  categoryButtons: {
     flexDirection: "row",
     justifyContent: "space-around",
-    marginBottom: 15,
+    marginBottom: 12,
   },
-  dropdownOption: {
-    padding: 10,
+  categoryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#d4b996",
-    borderRadius: 5,
-    backgroundColor: "#fff",
+    borderColor: "#C7A247",
+    backgroundColor: "#FFF8F0",
   },
-  selectedDropdownOption: {
-    backgroundColor: "#f1e3c8",
-  },
-  dropdownText: { color: "#3b2d2a" },
-  selectedDropdownText: { color: "#b36b5e", fontWeight: "bold" },
-  saveButton: {
-    backgroundColor: "#f6cacc",
-    padding: 15,
+  selectedCategoryButton: { backgroundColor: "#C7A247" },
+  categoryText: { color: "#C7A247" },
+  selectedCategoryText: { color: "#FFF8F0", fontWeight: "bold" },
+  buttonRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  button: {
+    flex: 1,
+    padding: 12,
     borderRadius: 8,
     alignItems: "center",
-    marginTop: 10,
-    marginBottom: 20,
+    marginHorizontal: 6,
   },
-  saveButtonText: {
-    color: "#3b2d2a",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  courseTabs: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 15,
-  },
-  tabButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 15,
-    borderRadius: 6,
-  },
-  selectedTab: {
-    backgroundColor: "#f1e3c8",
-  },
-  tabText: { color: "#3b2d2a", fontWeight: "500" },
-  selectedTabText: { color: "#b36b5e", fontWeight: "bold" },
-  menuCard: {
-    backgroundColor: "#f5f3ef",
-    borderRadius: 8,
+  cancelButton: { backgroundColor: "#FFF8F0" },
+  saveButton: { backgroundColor: "#C7A247" },
+  cancelText: { color: "#5A4309", fontWeight: "bold" },
+  saveText: { color: "white", fontWeight: "bold" },
+  deleteBtn: {
+    height: 36,
+    width: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: "#d4b996",
-    padding: 15,
-    marginBottom: 10,
+    borderColor: "#C7A247",
+    marginLeft: 8,
   },
-  dishName: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#3b2d2a",
+  pill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#C7A247",
+    backgroundColor: "#FFF8F0",
+    marginRight: 8,
+    marginBottom: 8,
   },
-  price: {
-    color: "#b36b5e",
-    fontWeight: "bold",
-  },
-  dishDescription: {
-    color: "#555",
-    marginTop: 4,
-  },
-  emptyText: {
-    textAlign: "center",
-    color: "#999",
-    marginTop: 50,
-  },
-  subTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 10,
-    color: "#3b2d2a",
-  },
-  summaryText: {
-    color: "#777",
-    fontSize: 14,
-    marginTop: 5,
-  },
+  pillActive: { backgroundColor: "#C7A247" },
+  pillText: { color: "#5A4309" },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", marginBottom: 12 },
 });
